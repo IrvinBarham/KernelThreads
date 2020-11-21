@@ -4,8 +4,12 @@
 #include "user.h"
 #include "x86.h"
 
+#define PGSIZE 0x1000
+void* userStackAddress[64];
+int valueInArray[64];
+
 char*
-strcpy(char *s, const char *t)
+strcpy(char *s, char *t)
 {
   char *os;
 
@@ -24,7 +28,7 @@ strcmp(const char *p, const char *q)
 }
 
 uint
-strlen(const char *s)
+strlen(char *s)
 {
   int n;
 
@@ -68,7 +72,7 @@ gets(char *buf, int max)
 }
 
 int
-stat(const char *n, struct stat *st)
+stat(char *n, struct stat *st)
 {
   int fd;
   int r;
@@ -93,14 +97,74 @@ atoi(const char *s)
 }
 
 void*
-memmove(void *vdst, const void *vsrc, int n)
+memmove(void *vdst, void *vsrc, int n)
 {
-  char *dst;
-  const char *src;
-
+  char *dst, *src;
+  
   dst = vdst;
   src = vsrc;
   while(n-- > 0)
     *dst++ = *src++;
   return vdst;
+}
+
+int 
+thread_create(void (*start_routine)(void *, void *), void *arg1, void *arg2)
+{
+  void* stackAddr, *stackPassed;
+  stackAddr = malloc(2*PGSIZE);
+  // malloc did not work
+  if(stackAddr == 0) {
+    return -1;
+  }
+  //To make the stack page aligned
+  int extraSpace = ((int)(stackAddr))%PGSIZE;
+  stackPassed = (stackAddr) + PGSIZE - extraSpace;
+  int childPid = clone(start_routine, arg1, arg2, stackPassed);
+  if (childPid != -1) {
+    for(int i=0; i<64; i++ ) {
+      if(userStackAddress[i] == NULL) {
+        userStackAddress[i] = stackAddr;
+        valueInArray[i] = childPid;
+        break;
+      }
+    }
+  }
+  else {
+    free(stackAddr);
+  }
+  return childPid;
+}
+
+int
+thread_join()
+{
+  void *stack;
+  int childPid;
+  //Need to free stack
+  childPid = join(&stack);
+  if (childPid != -1) {
+    for(int i=0; i<64; i++) {
+      if(valueInArray[i] == childPid) {
+        free(userStackAddress[i]);
+        valueInArray[i] = -1;
+        userStackAddress[i] = NULL;
+      }
+    }
+  }
+  return childPid;
+}
+
+void lock_init(lock_t *lock) {
+  lock->ticket = 0;
+  lock->turn = 0;
+}
+
+void lock_acquire(lock_t *lock) {
+  int myturn = fadd(&lock->ticket, 1);
+  while (lock->turn != myturn);
+}
+
+void lock_release(lock_t *lock) {
+  fadd(&lock->turn, 1);
 }

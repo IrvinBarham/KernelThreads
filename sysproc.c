@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
+#include <stddef.h>
 
 int
 sys_fork(void)
@@ -88,4 +89,34 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+int
+sys_clone(void)
+{
+  void *arg1, *arg2, *stack;
+  void(*func) (void *, void *);
+
+  if(argptr(0, (void *)&func, 0) < 0)
+    return -1;
+  if(argptr(1, (void *)&arg1, sizeof(void*)) < 0)
+    return -1;
+  if(argptr(2, (void *)&arg2, sizeof(void*)) < 0)
+    return -1;
+  if(argptr(3, (void *)&stack, PGSIZE) < 0)
+    return -1;
+
+  // Checking for page alignment
+  if((uint)stack % PGSIZE != 0)
+    return -1;
+  return clone(func, arg1, arg2, stack);
+}
+
+int
+sys_join(void)
+{
+  void **stackPointer = NULL;
+  if(argptr(0, (void*)&stackPointer, sizeof(void *)) < 0)
+    return -1;
+  return join(stackPointer);
 }
