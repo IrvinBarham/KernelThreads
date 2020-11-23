@@ -130,6 +130,15 @@ xchg(volatile uint *addr, uint newval)
   return result;
 }
 
+static inline uint fadd(volatile int *addr, uint val)
+{
+  asm volatile("lock; xaddl %0, %1" :
+	       "+r" (val), "+m" (*addr) :
+	       :
+	       "memory");
+  return val;
+}
+
 static inline uint
 rcr2(void)
 {

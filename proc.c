@@ -226,15 +226,16 @@ clone(void(*func) (void *, void *), void* arg1, void* arg2, void* stack)
 {
   int i, pid;
   struct proc *np;
+  struct proc *curproc = myproc();
   char *stackAddr;
   // Allocate process.
   if((np = allocproc()) == 0)
     return -1;
-  np->pgdir = proc->pgdir;
+  np->pgdir = curproc->pgdir;
 
-  np->sz = proc->sz;
-  np->parent = proc;
-  *np->tf = *proc->tf;
+  np->sz = curproc->sz;
+  np->parent = curproc;
+  *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -250,13 +251,13 @@ clone(void(*func) (void *, void *), void* arg1, void* arg2, void* stack)
   *(void **)(stackAddr + PGSIZE -4) = (void*)arg2;
 
   for(i = 0; i < NOFILE; i++)
-    if(proc->ofile[i])
-      np->ofile[i] = filedup(proc->ofile[i]);
-  np->cwd = idup(proc->cwd);
+    if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]);
+  np->cwd = idup(curproc->cwd);
  
   pid = np->pid;
   np->state = RUNNABLE;
-  safestrcpy(np->name, proc->name, sizeof(proc->name));
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
   return pid;
 }
 
@@ -312,13 +313,14 @@ join(void **stackPointer)
 {
   struct proc *p;
   int threadsExist, pid;
+  struct proc *curproc = myproc();
 
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for zombie threads.
     threadsExist = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(proc->pgdir != p->pgdir || proc->pid == p->pid)
+      if(curproc->pgdir != p->pgdir || curproc->pid == p->pid)
         continue;
       threadsExist = 1;
       if(p->state == ZOMBIE){
@@ -338,13 +340,13 @@ join(void **stackPointer)
     }
 
     // No point waiting if we don't have any threads.
-    if(!threadsExist || proc->killed){
+    if(!threadsExist || curproc->killed){
       release(&ptable.lock);
       return -1;
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    sleep(proc, &ptable.lock);  //DOC: wait-sleep
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
   }
 }
 
